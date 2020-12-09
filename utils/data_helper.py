@@ -44,7 +44,7 @@ class DataSet:
         # construct answer poor for filter results
         self.triplets_train_pool = set(triplets_train)
         self.triplets_true_pool = set(triplets_train + triplets_test)
-        self.predict_mode = self.data_dir.split('/')[-1]
+        self.predict_mode = ""
 
         self.triplets_train = np.asarray(triplets_train)
         self.triplets_test = np.asarray(triplets_test)
@@ -263,6 +263,42 @@ class DataSet:
             else:
                 yield [batch_weight_ph, batch_weight_pt,
                     batch_positive, batch_relation_pt, neighbor_head_pos, neighbor_tail_pos]
+
+    def next_sample_eval(self, triplet_evaluate, is_test):
+        if is_test:
+            answer_pool = self.triplets_true_pool
+        else:
+            answer_pool = self.triplets_train_pool
+
+        # construct two batches for head and tail prediction
+        batch_predict_head = [triplet_evaluate]
+        # replacing head
+        id_heads_corrupted_list = range(self.num_training_entity)
+        id_heads_corrupted_set = set(id_heads_corrupted_list)
+        id_heads_corrupted_set.discard(triplet_evaluate[0])  # remove the golden head
+        for head in id_heads_corrupted_list:
+            if (head, triplet_evaluate[1], triplet_evaluate[2]) in answer_pool:
+                id_heads_corrupted_set.discard(head)
+        # apart from the test case (0-th element), add triplets formed with other entities
+        batch_predict_head.extend([(head, triplet_evaluate[1], triplet_evaluate[2]) for head in id_heads_corrupted_set])
+
+        batch_predict_tail = [triplet_evaluate]
+        # replacing tail
+        # id_tails_corrupted = set(random.sample(range(self.num_entity), 1000))
+        id_tails_corrupted_list = range(self.num_training_entity)
+        id_tails_corrupted_set = set(id_tails_corrupted_list)
+        id_tails_corrupted_set.discard(triplet_evaluate[2])  # remove the golden tail
+        for tail in id_tails_corrupted_list:
+            if (triplet_evaluate[0], triplet_evaluate[1], tail) in answer_pool:
+                id_tails_corrupted_set.discard(tail)
+        batch_predict_tail.extend([(triplet_evaluate[0], triplet_evaluate[1], tail) for tail in id_tails_corrupted_set])
+
+        if 'head' in self.predict_mode: # and self.corrupt_mode == 'partial':
+            return np.asarray(batch_predict_tail)
+        elif 'tail' in self.predict_mode: # and self.corrupt_mode == 'partial':
+            return np.asarray(batch_predict_head)
+        else:
+            return np.asarray(batch_predict_tail), np.asarray(batch_predict_head)
 
     def __read_train_file(self, cnt_entity, cnt_relation, data_path_train, train_entity, triplet_train):
         with open(data_path_train, 'r') as fr:
