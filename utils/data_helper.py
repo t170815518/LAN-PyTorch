@@ -1,4 +1,5 @@
 import os
+import random
 import numpy as np
 from collections import defaultdict
 
@@ -184,6 +185,84 @@ class DataSet:
                     head, relation, tail = line
                     triplet_tensor.append((head, relation, tail))
         return triplet_tensor
+
+    def batch_iter_epoch(self, data, batch_size, num_negative=1, corrupt=True, shuffle=True):
+        """ Returns prepared information in np.ndarray to feed into the model.
+        TODO: add checking to avoid negative samples become correct
+        """
+        data_size = len(data)
+        if data_size % batch_size == 0:
+            num_batches_per_epoch = int(data_size/batch_size)
+        else:
+            num_batches_per_epoch = int(data_size/batch_size) + 1
+
+        # Shuffle the data at each epoch
+        if shuffle:
+            shuffled_indices = np.random.permutation(np.arange(data_size))
+        else:
+            shuffled_indices = np.arange(data_size)
+
+        for batch_num in range(num_batches_per_epoch):
+            start_index = batch_num * batch_size
+            end_index = min((batch_num + 1) * batch_size, data_size)
+            real_batch_num = end_index - start_index
+            batch_indices = shuffled_indices[start_index:end_index]
+            batch_positive = data[batch_indices]
+            neighbor_head_pos = self.graph_train[batch_positive[:, 0]] #[:, :, 0:2]
+            neighbor_tail_pos = self.graph_train[batch_positive[:, 2]] #[:, :, 0:2]
+            batch_relation_ph = np.asarray(batch_positive[:, 1])
+            batch_relation_pt = batch_relation_ph + self.num_relation
+            neighbor_imply_ph = self.weight_graph[batch_positive[:, 0]].reshape(-1, self.max_neighbor, 1)
+            neighbor_imply_pt = self.weight_graph[batch_positive[:, 2]].reshape(-1, self.max_neighbor, 1)
+            query_weight_ph = self.co_relation[batch_relation_ph]
+            query_weight_pt = self.co_relation[batch_relation_pt]
+            batch_weight_ph = query_weight_ph[np.arange(real_batch_num).repeat(self.max_neighbor),
+                                              neighbor_head_pos[:, :, 0].reshape(-1)].reshape(real_batch_num, self.max_neighbor, 1)
+            batch_weight_pt = query_weight_pt[np.arange(real_batch_num).repeat(self.max_neighbor),
+                                              neighbor_tail_pos[:, :, 0].reshape(-1)].reshape(real_batch_num, self.max_neighbor, 1)
+            batch_weight_ph = np.concatenate((batch_weight_ph, neighbor_imply_ph), axis=2)
+            batch_weight_pt = np.concatenate((batch_weight_pt, neighbor_imply_pt), axis=2)
+
+            if corrupt:
+                batch_negative = []
+                for triplet in batch_positive:
+                    id_head_corrupted = triplet[0]
+                    id_tail_corrupted = triplet[2]
+                    id_relation = triplet[1]
+
+                    for n_neg in range(num_negative):
+                        if self.corrupt_mode == 'both':
+                            head_prob = np.random.binomial(1, 0.5)
+                            if head_prob:
+                                id_head_corrupted = random.sample(range(self.num_training_entity), 1)[0]
+                            else:
+                                id_tail_corrupted = random.sample(range(self.num_training_entity), 1)[0]
+                        else:
+                            if 'tail' in self.predict_mode:
+                                id_head_corrupted = random.sample(range(self.num_training_entity), 1)[0]
+                            elif 'head' in self.predict_mode:
+                                id_tail_corrupted = random.sample(range(self.num_training_entity), 1)[0]
+                        batch_negative.append([id_head_corrupted, triplet[1], id_tail_corrupted])
+
+                batch_negative = np.asarray(batch_negative)
+                neighbor_head_neg = self.graph_train[batch_negative[:, 0]]
+                neighbor_tail_neg = self.graph_train[batch_negative[:, 2]]
+                neighbor_imply_nh = self.weight_graph[batch_negative[:, 0]].reshape(-1, self.max_neighbor, 1)
+                neighbor_imply_nt = self.weight_graph[batch_negative[:, 2]].reshape(-1, self.max_neighbor, 1)
+
+                batch_relation_nh = batch_negative[:, 1]
+                batch_relation_nt = batch_relation_nh + self.num_relation
+                query_weight_nh = self.co_relation[batch_relation_nh]
+                query_weight_nt = self.co_relation[batch_relation_nt]
+                batch_weight_nh = query_weight_nh[np.arange(real_batch_num).repeat(self.max_neighbor), neighbor_head_neg[:, :, 0].reshape(-1)].reshape(real_batch_num, self.max_neighbor, 1)
+                batch_weight_nt = query_weight_nt[np.arange(real_batch_num).repeat(self.max_neighbor), neighbor_tail_neg[:, :, 0].reshape(-1)].reshape(real_batch_num, self.max_neighbor, 1)
+                batch_weight_nh = np.concatenate((batch_weight_nh, neighbor_imply_nh), axis=2)
+                batch_weight_nt = np.concatenate((batch_weight_nt, neighbor_imply_nt), axis=2)
+                yield [batch_weight_ph, batch_weight_pt, batch_weight_nh, batch_weight_nt,
+                    batch_positive, batch_negative, batch_relation_ph, batch_relation_pt, batch_relation_nh, batch_relation_nt, neighbor_head_pos, neighbor_tail_pos, neighbor_head_neg, neighbor_tail_neg]
+            else:
+                yield [batch_weight_ph, batch_weight_pt,
+                    batch_positive, batch_relation_pt, neighbor_head_pos, neighbor_tail_pos]
 
     def __read_train_file(self, cnt_entity, cnt_relation, data_path_train, train_entity, triplet_train):
         with open(data_path_train, 'r') as fr:
