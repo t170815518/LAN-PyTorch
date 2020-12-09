@@ -1,7 +1,13 @@
 import argparse
 import logging
+import time
+import datetime
+import os
+from math import inf
 import torch
 from utils.data_helper import DataSet
+from utils.link_prediction import run_link_prediction
+from model.framework import LAN
 
 logger = logging.getLogger()
 
@@ -54,6 +60,90 @@ def run_training(config):
     logger.info("Loading data...")
     dataset = DataSet(config, logger)
     logger.info("Loading finish...")
+
+    model = LAN(config, dataset.num_training_entity, dataset.num_relation)
+    save_path = os.path.join(config.save_dir, "train_model.pt")
+    model.to(config.device)
+    optim = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
+
+    # training
+    num_batch = dataset.num_sample // config.batch_size
+    logger.info('Train with {} batches'.format(num_batch))
+    best_performance = inf
+
+    for epoch in range(config.num_epoch):
+        st_epoch = time.time()
+        loss_epoch = 0.
+        cnt_batch = 0
+
+        for batch_data in dataset.batch_iter_epoch(dataset.triplets_train, config.batch_size, config.n_neg):
+            model.train()
+
+            st_batch = time.time()
+
+            batch_weight_ph, batch_weight_pt, batch_weight_nh, batch_weight_nt, batch_positive, batch_negative, \
+                batch_relation_ph, batch_relation_pt, batch_relation_nh, batch_relation_nt, batch_neighbor_hp, \
+                batch_neighbor_tp, batch_neighbor_hn, batch_neighbor_tn = batch_data
+            feed_dict = {
+                model.neighbor_head_pos: batch_neighbor_hp,
+                model.neighbor_tail_pos: batch_neighbor_tp,
+                model.neighbor_head_neg: batch_neighbor_hn,
+                model.neighbor_tail_neg: batch_neighbor_tn,
+                model.input_relation_ph: batch_relation_ph,
+                model.input_relation_pt: batch_relation_pt,
+                model.input_relation_nh: batch_relation_nh,
+                model.input_relation_nt: batch_relation_nt,
+                model.input_triplet_pos: batch_positive,
+                model.input_triplet_neg: batch_negative,
+                model.neighbor_weight_ph: batch_weight_ph,
+                model.neighbor_weight_pt: batch_weight_pt,
+                model.neighbor_weight_nh: batch_weight_nh,
+                model.neighbor_weight_nt: batch_weight_nt
+            }
+
+            loss_batch = model.loss(feed_dict)
+
+            cnt_batch += 1
+            loss_epoch += loss_batch.item()
+
+            loss_batch.backward()
+            optim.step()
+            model.zero_grad()
+
+            en_batch = time.time()
+
+            # print an overview every some batches
+            if (cnt_batch + 1) % config.steps_per_display == 0 or (cnt_batch + 1) == num_batch:
+                batch_info = 'epoch {}, batch {}, loss: {:.3f}, time: {:.3f}s'.format(epoch, cnt_batch, loss_batch,
+                                                                                      en_batch - st_batch)
+                print(batch_info)
+                logger.info(batch_info)
+        en_epoch = time.time()
+        epoch_info = 'epoch {}, mean loss: {:.3f}, time: {:.3f}s'.format(epoch, loss_epoch / cnt_batch,
+                                                                         en_epoch - st_epoch)
+        print(epoch_info)
+        logger.info(epoch_info)
+
+        # evaluate the model every some steps
+        if (epoch + 1) % config.epoch_per_checkpoint == 0 or (epoch + 1) == config.num_epoch:
+            st_test = time.time()
+            performance = run_link_prediction(config, model, dataset, epoch, logger, is_test=False)
+            if performance < best_performance:
+                best_performance = performance
+                torch.save(model.state_dict(), save_path)
+                time_str = datetime.datetime.now().isoformat()
+                saved_message = '{}: model at epoch {} save in file {}'.format(time_str, epoch, save_path)
+                print(saved_message)
+                logger.info(saved_message)
+
+            en_test = time.time()
+            test_finish_message = 'testing finished with time: {:.3f}s'.format(en_test - st_test)
+            print(test_finish_message)
+            logger.info(test_finish_message)
+
+    finished_message = 'Training finished'
+    print(finished_message)
+    logger.info(finished_message)
 
 
 def set_up_logger(config):
