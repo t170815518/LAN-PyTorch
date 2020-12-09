@@ -42,12 +42,12 @@ def run_link_prediction(args, model, dataset, epoch, logger, is_test=False):
                 # batch_triplet, batch_relation_tail, batch_neighbor_head, batch_neighbor_tail = batch_eval
                 batch_relation_head = batch_triplet[:, 1]
                 feed_dict = {
-                        model.neighbor_head_pos: batch_neighbor_head,
-                        model.neighbor_tail_pos: batch_neighbor_tail,
-                        model.input_relation_ph: batch_relation_head,
-                        model.input_relation_pt: batch_relation_tail,
-                        model.neighbor_weight_ph: batch_weight_ph,
-                        model.neighbor_weight_pt: batch_weight_pt,
+                        "neighbor_head_pos": batch_neighbor_head,
+                        "neighbor_tail_pos": batch_neighbor_tail,
+                        "input_relation_ph": batch_relation_head,
+                        "input_relation_pt": batch_relation_tail,
+                        "neighbor_weight_ph": batch_weight_ph,
+                        "neighbor_weight_pt": batch_weight_pt,
                 }
                 prediction_batch = model.get_positive_score(feed_dict)
                 prediction_all.append(prediction_batch)
@@ -57,8 +57,8 @@ def run_link_prediction(args, model, dataset, epoch, logger, is_test=False):
         prediction_head = eval_by_batch(sample_predict_head)
         prediction_tail = eval_by_batch(sample_predict_tail)
 
-        rank_head_current = (-prediction_head).argsort() + 1
-        rank_tail_current = (-prediction_tail).argsort() + 1
+        rank_head_current = int((-prediction_head).argsort().argmin() + 1)
+        rank_tail_current = int((-prediction_tail).argsort().argmin() + 1)
 
         rank_head += rank_head_current
         rec_rank_head += 1.0 / rank_head_current

@@ -3,7 +3,6 @@ import logging
 import time
 import datetime
 import os
-from math import inf
 import torch
 from utils.data_helper import DataSet
 from utils.link_prediction import run_link_prediction
@@ -39,7 +38,7 @@ def parse_arguments():
     parser.add_argument('--batch_size', type=int, default=1024)
     parser.add_argument('--evaluate_size', type=int, default=250)
     parser.add_argument('--steps_per_display', type=int, default=100)
-    parser.add_argument('--epoch_per_checkpoint', type=int, default=1)
+    parser.add_argument('--epoch_per_checkpoint', type=int, default=50)
     # gpu option
     parser.add_argument('--gpu_fraction', type=float, default=0.2)
     parser.add_argument('--gpu_device', type=str, default='0')
@@ -69,7 +68,7 @@ def run_training(config):
     # training
     num_batch = dataset.num_sample // config.batch_size
     logger.info('Train with {} batches'.format(num_batch))
-    best_performance = inf
+    best_performance = float("inf")
 
     for epoch in range(config.num_epoch):
         st_epoch = time.time()
@@ -85,20 +84,20 @@ def run_training(config):
                 batch_relation_ph, batch_relation_pt, batch_relation_nh, batch_relation_nt, batch_neighbor_hp, \
                 batch_neighbor_tp, batch_neighbor_hn, batch_neighbor_tn = batch_data
             feed_dict = {
-                model.neighbor_head_pos: batch_neighbor_hp,
-                model.neighbor_tail_pos: batch_neighbor_tp,
-                model.neighbor_head_neg: batch_neighbor_hn,
-                model.neighbor_tail_neg: batch_neighbor_tn,
-                model.input_relation_ph: batch_relation_ph,
-                model.input_relation_pt: batch_relation_pt,
-                model.input_relation_nh: batch_relation_nh,
-                model.input_relation_nt: batch_relation_nt,
-                model.input_triplet_pos: batch_positive,
-                model.input_triplet_neg: batch_negative,
-                model.neighbor_weight_ph: batch_weight_ph,
-                model.neighbor_weight_pt: batch_weight_pt,
-                model.neighbor_weight_nh: batch_weight_nh,
-                model.neighbor_weight_nt: batch_weight_nt
+                "neighbor_head_pos": batch_neighbor_hp,
+                "neighbor_tail_pos": batch_neighbor_tp,
+                "neighbor_head_neg": batch_neighbor_hn,
+                "neighbor_tail_neg": batch_neighbor_tn,
+                "input_relation_ph": batch_relation_ph,
+                "input_relation_pt": batch_relation_pt,
+                "input_relation_nh": batch_relation_nh,
+                "input_relation_nt": batch_relation_nt,
+                "input_triplet_pos": batch_positive,
+                "input_triplet_neg": batch_negative,
+                "neighbor_weight_ph": batch_weight_ph,
+                "neighbor_weight_pt": batch_weight_pt,
+                "neighbor_weight_nh": batch_weight_nh,
+                "neighbor_weight_nt": batch_weight_nt
             }
 
             loss_batch = model.loss(feed_dict)
@@ -126,8 +125,10 @@ def run_training(config):
 
         # evaluate the model every some steps
         if (epoch + 1) % config.epoch_per_checkpoint == 0 or (epoch + 1) == config.num_epoch:
+            model.eval()
             st_test = time.time()
-            performance = run_link_prediction(config, model, dataset, epoch, logger, is_test=False)
+            with torch.no_grad():
+                performance = run_link_prediction(config, model, dataset, epoch, logger, is_test=False)
             if performance < best_performance:
                 best_performance = performance
                 torch.save(model.state_dict(), save_path)
