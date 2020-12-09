@@ -1,6 +1,7 @@
 import argparse
 import logging
 import torch
+from utils.data_helper import DataSet
 
 logger = logging.getLogger()
 
@@ -13,8 +14,8 @@ def main():
 def parse_arguments():
     """ Parses arguments from CLI. """
     parser = argparse.ArgumentParser(description="Configuration for LAN model")
-    parser.add_argument('--data_dir', '-D', type=str, default="data/fb15K/head-10")
-    parser.add_argument('--save_dir', '-S', type=str, default="data/fb15K/head-10")
+    parser.add_argument('--data_dir', '-D', type=str, default="data/FB15k-237")
+    parser.add_argument('--save_dir', '-S', type=str, default="data/FB15k-237")
     # model
     parser.add_argument('--use_relation', type=int, default=1)
     parser.add_argument('--embedding_dim', '-e', type=int, default=100)
@@ -37,7 +38,8 @@ def parse_arguments():
     parser.add_argument('--gpu_fraction', type=float, default=0.2)
     parser.add_argument('--gpu_device', type=str, default='0')
     parser.add_argument('--allow_soft_placement', type=bool, default=False)
-    return parser
+
+    return parser.parse_args()
 
 
 def run_training(config):
@@ -48,11 +50,16 @@ def run_training(config):
 
     logger.info('args: {}'.format(config))
 
+    # prepare data
+    logger.info("Loading data...")
+    dataset = DataSet(config, logger)
+    logger.info("Loading finish...")
+
 
 def set_up_logger(config):
     checkpoint_dir = config.save_dir
     logger.setLevel(logging.INFO)
-    handler = logging.FileHandler(checkpoint_dir + 'train.log', 'w')
+    handler = logging.FileHandler(checkpoint_dir + 'train.log', 'w+')
     handler.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s: %(message)s', datefmt='%Y/%m/%d %H:%M:%S')
     handler.setFormatter(formatter)
