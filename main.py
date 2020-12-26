@@ -7,6 +7,7 @@ import torch
 from utils.data_helper import DataSet
 from utils.link_prediction import run_link_prediction
 from model.framework import LAN
+from NSCaching.BernCorrupter import BernCorrupter
 
 logger = logging.getLogger()
 
@@ -38,7 +39,10 @@ def parse_arguments():
     parser.add_argument('--batch_size', type=int, default=1024)
     parser.add_argument('--evaluate_size', type=int, default=250)
     parser.add_argument('--steps_per_display', type=int, default=100)
-    parser.add_argument('--epoch_per_checkpoint', type=int, default=50)
+    parser.add_argument('--epoch_per_checkpoint', type=int, default=25)
+    # NSCaching
+    parser.add_argument('--N_1', type=int, default=30)
+    parser.add_argument('--N_2', type=int, default=90)
     # gpu option
     parser.add_argument('--gpu_fraction', type=float, default=0.2)
     parser.add_argument('--gpu_device', type=str, default='0')
@@ -60,10 +64,16 @@ def run_training(config):
     dataset = DataSet(config, logger)
     logger.info("Loading finish...")
 
+    dataset.get_cache()
+
+    corrputer = BernCorrupter(dataset.triplets_train, dataset.num_entity, dataset.num_relation*2+1)
+    dataset.corrupter = corrputer
+
     model = LAN(config, dataset.num_training_entity, dataset.num_relation)
     save_path = os.path.join(config.save_dir, "train_model.pt")
     model.to(config.device)
     optim = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
+    dataset.model = model
 
     # training
     num_batch = dataset.num_sample // config.batch_size
@@ -80,27 +90,7 @@ def run_training(config):
 
             st_batch = time.time()
 
-            batch_weight_ph, batch_weight_pt, batch_weight_nh, batch_weight_nt, batch_positive, batch_negative, \
-                batch_relation_ph, batch_relation_pt, batch_relation_nh, batch_relation_nt, batch_neighbor_hp, \
-                batch_neighbor_tp, batch_neighbor_hn, batch_neighbor_tn = batch_data
-            feed_dict = {
-                "neighbor_head_pos": batch_neighbor_hp,
-                "neighbor_tail_pos": batch_neighbor_tp,
-                "neighbor_head_neg": batch_neighbor_hn,
-                "neighbor_tail_neg": batch_neighbor_tn,
-                "input_relation_ph": batch_relation_ph,
-                "input_relation_pt": batch_relation_pt,
-                "input_relation_nh": batch_relation_nh,
-                "input_relation_nt": batch_relation_nt,
-                "input_triplet_pos": batch_positive,
-                "input_triplet_neg": batch_negative,
-                "neighbor_weight_ph": batch_weight_ph,
-                "neighbor_weight_pt": batch_weight_pt,
-                "neighbor_weight_nh": batch_weight_nh,
-                "neighbor_weight_nt": batch_weight_nt
-            }
-
-            loss_batch = model.loss(feed_dict)
+            loss_batch = model.loss(batch_data)
 
             cnt_batch += 1
             loss_epoch += loss_batch.item()

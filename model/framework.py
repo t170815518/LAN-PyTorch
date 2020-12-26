@@ -98,6 +98,12 @@ class LAN(torch.nn.Module):
         score = decoder(head_embedded, tail_embedded, relation_embedded)
         return score
 
+    def prob(self, head_id, rel_id, tail_id):
+        head_emb = self.entity_embedding(head_id)
+        tail_emb = self.entity_embedding(tail_id)
+        rel_emb = self.relation_embedding_out(rel_id)
+        return F.softmax(self.decode(self.decoder, head_emb, tail_emb, rel_emb), dim=-1)
+
     def get_positive_score(self, feed_dict):
         for key, value in feed_dict.items():
             feed_dict[key] = torch.from_numpy(value).to(device=torch.cuda.current_device())
