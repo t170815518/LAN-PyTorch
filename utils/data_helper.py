@@ -207,7 +207,7 @@ class DataSet:
                     triplet_tensor.append((head, relation, tail))
         return triplet_tensor
 
-    def batch_iter_epoch(self, data, batch_size, num_negative=1, corrupt=True, shuffle=True, is_use_cache=True):
+    def batch_iter_epoch(self, data, batch_size, num_negative=1, corrupt=True, shuffle=True, is_use_cache=False):
         """ Returns prepared information in np.ndarray to feed into the model.
         """
         data_size = len(data)
@@ -228,8 +228,11 @@ class DataSet:
             real_batch_num = end_index - start_index
             batch_indices = shuffled_indices[start_index:end_index]
             batch_positive = data[batch_indices]
-            h_idx = self.head_cache_id[batch_indices]
-            t_idx = self.tail_cache_id[batch_indices]
+            try:
+                h_idx = self.head_cache_id[batch_indices]
+                t_idx = self.tail_cache_id[batch_indices]
+            except TypeError:  # when cache is not used 
+                pass
             neighbor_head_pos = self.graph_train[batch_positive[:, 0]]  # [:, :, 0:2]
             neighbor_tail_pos = self.graph_train[batch_positive[:, 2]]  # [:, :, 0:2]
             batch_relation_ph = np.asarray(batch_positive[:, 1])

@@ -3,6 +3,8 @@ import torch
 
 
 def run_link_prediction(args, model, dataset, epoch, logger, is_test=False):
+    """:param is_test: bool, true means evaluate all samples in dataset.triplets_test.
+    """
     logger.info('evaluating the current model...')
     rank_head = 0
     rank_tail = 0
@@ -21,16 +23,17 @@ def run_link_prediction(args, model, dataset, epoch, logger, is_test=False):
 
     if is_test:
         evaluate_size = len(dataset.triplets_test)
-        evaluate_data = dataset.triplets_test.tolist()
+        eval_population = dataset.triplets_test.tolist()
     else:
         if args.evaluate_size == 0:
             evaluate_size = len(dataset.triplets_dev)
         else:
             evaluate_size = args.evaluate_size
         evaluate_data = dataset.triplets_test.tolist()
+        eval_population = random.sample(evaluate_data, evaluate_size)
 
     cnt_sample = 0
-    for triplet in random.sample(evaluate_data, evaluate_size):
+    for triplet in eval_population:
         # using head predict tail, and using tail to predict head
         sample_predict_head, sample_predict_tail = dataset.next_sample_eval(triplet, is_test=is_test)
 
@@ -90,34 +93,47 @@ def run_link_prediction(args, model, dataset, epoch, logger, is_test=False):
         if rank_tail_current == 1:
             acc_tail += 1
 
-    rank_head_mean = rank_head // evaluate_size
-    hit10_head = hit10_head * 1.0 / evaluate_size
-    hit3_head = hit3_head * 1.0 / evaluate_size
-    acc_head = acc_head * 1.0 / evaluate_size
-    rec_rank_head = rec_rank_head / evaluate_size
+        cnt_sample += 1
+        if cnt_sample % 500 == 0:
+            print("evaluating {}-th samples".format(cnt_sample))
+            print_eval_info(acc_head, acc_tail, epoch, cnt_sample, hit10_head, hit10_tail, hit3_head, hit3_tail,
+                            logger, rank_head, rank_tail, rec_rank_head, rec_rank_tail)
 
-    rank_tail_mean = rank_tail // evaluate_size
-    hit10_tail = hit10_tail * 1.0 / evaluate_size
-    hit3_tail = hit3_tail * 1.0 / evaluate_size
-    acc_tail = acc_tail * 1.0 / evaluate_size
-    rec_rank_tail = rec_rank_tail / evaluate_size
+    rank_head_mean = print_eval_info(acc_head, acc_tail, epoch, evaluate_size, hit10_head, hit10_tail, hit3_head, hit3_tail, logger,
+                    rank_head, rank_tail, rec_rank_head, rec_rank_tail)
 
-    performance_info_head = '[head] epoch {} MR: {:d}, MRR: {:.3f}, hit@10: {:.3f}%, hit@3: {:.3f}%, hit@1: {:.3f}%'.format(epoch,
-                                                                                                                rank_head_mean,
-                                                                                                                rec_rank_head,
-                                                                                                                hit10_head * 100,
-                                                                                                                hit3_head * 100,
-                                                                                                                acc_head * 100)
-    performance_info_tail = '[tail] epoch {} MR: {:d}, MRR: {:.3f}, hit@10: {:.3f}%, hit@3: {:.3f}%, hit@1: {:.3f}%'.format(epoch,
-                                                                                                                rank_tail_mean,
-                                                                                                                rec_rank_tail,
-                                                                                                                hit10_tail * 100,
-                                                                                                                hit3_tail * 100,
-                                                                                                                acc_tail * 100)
+    return rank_head_mean
 
+
+def print_eval_info(acc_head, acc_tail, epoch, evaluate_size, hit10_head, hit10_tail, hit3_head, hit3_tail, logger,
+                    rank_head, rank_tail, rec_rank_head, rec_rank_tail):
+    _rank_head_mean = rank_head // evaluate_size
+    _hit10_head = hit10_head * 1.0 / evaluate_size
+    _hit3_head = hit3_head * 1.0 / evaluate_size
+    _acc_head = acc_head * 1.0 / evaluate_size
+    _rec_rank_head = rec_rank_head / evaluate_size
+    _rank_tail_mean = rank_tail // evaluate_size
+    _hit10_tail = hit10_tail * 1.0 / evaluate_size
+    _hit3_tail = hit3_tail * 1.0 / evaluate_size
+    _acc_tail = acc_tail * 1.0 / evaluate_size
+    _rec_rank_tail = rec_rank_tail / evaluate_size
+    performance_info_head = '[head] epoch {} MR: {:d}, MRR: {:.3f}, hit@10: {:.3f}%, hit@3: {:.3f}%, hit@1: {:.3f}%'.format(
+        epoch,
+        _rank_head_mean,
+        _rec_rank_head,
+        _hit10_head * 100,
+        _hit3_head * 100,
+        _acc_head * 100)
+    performance_info_tail = '[tail] epoch {} MR: {:d}, MRR: {:.3f}, hit@10: {:.3f}%, hit@3: {:.3f}%, hit@1: {:.3f}%'.format(
+        epoch,
+        _rank_tail_mean,
+        _rec_rank_tail,
+        _hit10_tail * 100,
+        _hit3_tail * 100,
+        _acc_tail * 100)
     print(performance_info_head)
     logger.info(performance_info_head)
     print(performance_info_tail)
     logger.info(performance_info_tail)
 
-    return min_rank_head
+    return _rank_head_mean
