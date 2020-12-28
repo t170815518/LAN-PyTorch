@@ -11,12 +11,14 @@ class Attention(torch.nn.Module):
         - query_relation_embedding: relation-specific z_q in nn-mechanism
         ...
     """
-    def __init__(self, num_relation, num_entity, embedding_dim):
+    def __init__(self, num_relation, num_entity, embedding_dim, max_neighbor=None, is_save_attention=False):
         super(Attention, self).__init__()
 
         self.embedding_dim = embedding_dim
         self.num_relation = num_relation
         self.num_entity = num_entity
+        self.max_neighbor = max_neighbor
+        self.is_save_attention = is_save_attention
 
         # parameters
         self.mlp_w = torch.nn.Embedding(self.num_entity * 2 + 1, self.embedding_dim)
@@ -54,13 +56,13 @@ class Attention(torch.nn.Module):
         attention_logit = self.mlp(query_relation, transformed, max_neighbors)
         mask_logit = self.mask_weight[input_entity]
         attention_logit = attention_logit - torch.reshape(mask_logit, [-1, max_neighbors])
-        attention_weight = F.softmax(attention_logit, dim=1)
-        attention_weight = attention_weight + weight[:, :, 0] / (weight[:, :, 1] + 1)
-
+        nn_weight = F.softmax(attention_logit, dim=1)
+        logic_attention = weight[:, :, 0] / (weight[:, :, 1] + 1)
+        attention_weight = nn_weight + logic_attention
         attention_weight = torch.reshape(attention_weight, [-1, max_neighbors, 1])
         output = torch.sum(transformed * attention_weight, dim=1)
         attention_weight = torch.reshape(attention_weight, [-1, max_neighbors])
-        return output, attention_weight
+        return output, logic_attention, nn_weight
 
     def _transform(self, e, r):
         normed = F.normalize(r, p=2, dim=2)

@@ -41,12 +41,15 @@ def parse_arguments():
     parser.add_argument('--steps_per_display', type=int, default=100)
     parser.add_argument('--epoch_per_checkpoint', type=int, default=25)
     # NSCaching
+    parser.add_argument('--is_use_NSCaching', type=bool, default=False)
     parser.add_argument('--N_1', type=int, default=30)
     parser.add_argument('--N_2', type=int, default=90)
     # gpu option
     parser.add_argument('--gpu_fraction', type=float, default=0.2)
     parser.add_argument('--gpu_device', type=str, default='0')
     parser.add_argument('--allow_soft_placement', type=bool, default=False)
+    # for analysis
+    parser.add_argument('--attention_record', type=bool, default=False)
 
     return parser.parse_args()
 

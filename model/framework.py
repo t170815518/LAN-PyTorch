@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from model.aggregator import Attention
 from model.score_function import TransE
+from utils.hooks import save_weights
 
 
 class LAN(torch.nn.Module):
@@ -29,8 +30,12 @@ class LAN(torch.nn.Module):
         self.relation_embedding_out = torch.nn.Embedding(self.num_relation, self.embedding_dim)
         nn.init.xavier_normal_(self.relation_embedding_out.weight.data)
 
-        self.encoder = Attention(self.num_relation, self.num_entity, self.embedding_dim)
+        self.encoder = Attention(self.num_relation, self.num_entity, self.embedding_dim, self.max_neighbor,
+                                 args.attention_record)
         self.decoder = TransE()
+
+        # register hook to get weights for analysis
+        self.encoder.register_forward_hook(save_weights)
 
     def loss(self, feed_dict):
         for key, value in feed_dict.items():
@@ -54,14 +59,14 @@ class LAN(torch.nn.Module):
         encoder = self.encoder
         decoder = self.decoder
 
-        head_pos_embedded, _ = self.encode(encoder, neighbor_head_pos, input_relation_ph,
+        head_pos_embedded = self.encode(encoder, neighbor_head_pos, input_relation_ph,
                                            neighbor_weight_ph)
-        tail_pos_embedded, _ = self.encode(encoder, neighbor_tail_pos, input_relation_pt,
+        tail_pos_embedded = self.encode(encoder, neighbor_tail_pos, input_relation_pt,
                                            neighbor_weight_pt)
 
-        head_neg_embedded, _ = self.encode(encoder, neighbor_head_neg, input_relation_nh,
+        head_neg_embedded= self.encode(encoder, neighbor_head_neg, input_relation_nh,
                                            neighbor_weight_nh)
-        tail_neg_embedded, _ = self.encode(encoder, neighbor_tail_neg, input_relation_nt,
+        tail_neg_embedded= self.encode(encoder, neighbor_tail_neg, input_relation_nt,
                                            neighbor_weight_nt)
 
         emb_relation_pos_out = self.relation_embedding_out(input_relation_ph)
@@ -115,9 +120,9 @@ class LAN(torch.nn.Module):
         neighbor_weight_ph = feed_dict['neighbor_weight_ph']
         neighbor_weight_pt = feed_dict['neighbor_weight_pt']
 
-        head_pos_embedded, _ = self.encode(self.encoder, neighbor_head_pos, input_relation_ph,
+        head_pos_embedded= self.encode(self.encoder, neighbor_head_pos, input_relation_ph,
                                            neighbor_weight_ph)
-        tail_pos_embedded, _ = self.encode(self.encoder, neighbor_tail_pos, input_relation_pt,
+        tail_pos_embedded= self.encode(self.encoder, neighbor_tail_pos, input_relation_pt,
                                            neighbor_weight_pt)
 
         emb_relation_pos_out = self.relation_embedding_out(input_relation_ph)
