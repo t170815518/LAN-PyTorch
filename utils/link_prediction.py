@@ -44,6 +44,7 @@ def run_link_prediction(args, model, dataset, epoch, logger, is_test=False):
                     batch_neighbor_tail = batch_eval
                 # batch_triplet, batch_relation_tail, batch_neighbor_head, batch_neighbor_tail = batch_eval
                 batch_relation_head = batch_triplet[:, 1]
+
                 feed_dict = {
                         "neighbor_head_pos": batch_neighbor_head,
                         "neighbor_tail_pos": batch_neighbor_tail,
@@ -51,6 +52,7 @@ def run_link_prediction(args, model, dataset, epoch, logger, is_test=False):
                         "input_relation_pt": batch_relation_tail,
                         "neighbor_weight_ph": batch_weight_ph,
                         "neighbor_weight_pt": batch_weight_pt,
+                        "input_triplet_pos": batch_triplet,
                 }
                 prediction_batch = model.get_positive_score(feed_dict)
                 prediction_all.append(prediction_batch)

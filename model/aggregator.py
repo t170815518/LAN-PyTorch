@@ -29,13 +29,15 @@ class Attention(torch.nn.Module):
         nn.init.xavier_normal_(self.att_w.data)
         self.att_v = torch.nn.Parameter(torch.zeros(size=(1, self.embedding_dim * 2)))
         nn.init.xavier_normal_(self.att_v.data)
+        self.concat_w = torch.nn.Parameter(torch.zeros(size=(self.embedding_dim * 2, self.embedding_dim)))
+        nn.init.xavier_normal_(self.concat_w.data)
 
         self.mask_emb = torch.cat([torch.ones([self.num_entity, 1]), torch.zeros([1, 1])], 0).\
             to(torch.cuda.current_device())
         self.mask_weight = torch.cat([torch.zeros([self.num_entity, 1]), torch.ones([1, 1])*1e19], 0).\
             to(torch.cuda.current_device())
 
-    def forward(self, input, neighbor, query_relation_id, weight):
+    def forward(self, input, neighbor, query_relation_id, weight, self_embedding):
         input_shape = input.shape
         max_neighbors = input_shape[1]
         hidden_size = input_shape[2]
@@ -61,6 +63,8 @@ class Attention(torch.nn.Module):
         attention_weight = nn_weight + logic_attention
         attention_weight = torch.reshape(attention_weight, [-1, max_neighbors, 1])
         output = torch.sum(transformed * attention_weight, dim=1)
+        output = torch.cat([output, self_embedding], dim=1)
+        output = torch.matmul(output, self.concat_w)  # [batch_size, d*2] * [d*2, d]
         attention_weight = torch.reshape(attention_weight, [-1, max_neighbors])
         return output, logic_attention, nn_weight
 

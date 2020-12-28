@@ -59,26 +59,26 @@ class LAN(torch.nn.Module):
         encoder = self.encoder
         decoder = self.decoder
 
+        ph_origin_embedded = self.entity_embedding(input_triplet_pos[:, 0])
+        pt_origin_embedded = self.entity_embedding(input_triplet_pos[:, 2])
+        nh_origin_embedded = self.entity_embedding(input_triplet_neg[:, 0])
+        nt_origin_embedded = self.entity_embedding(input_triplet_neg[:, 2])
+
         head_pos_embedded = self.encode(encoder, neighbor_head_pos, input_relation_ph,
-                                           neighbor_weight_ph)
+                                           neighbor_weight_ph, ph_origin_embedded)
         tail_pos_embedded = self.encode(encoder, neighbor_tail_pos, input_relation_pt,
-                                           neighbor_weight_pt)
+                                           neighbor_weight_pt, pt_origin_embedded)
 
         head_neg_embedded= self.encode(encoder, neighbor_head_neg, input_relation_nh,
-                                           neighbor_weight_nh)
+                                           neighbor_weight_nh, nh_origin_embedded)
         tail_neg_embedded= self.encode(encoder, neighbor_tail_neg, input_relation_nt,
-                                           neighbor_weight_nt)
+                                           neighbor_weight_nt, nt_origin_embedded)
 
         emb_relation_pos_out = self.relation_embedding_out(input_relation_ph)
         emb_relation_neg_out = self.relation_embedding_out(input_relation_nh)
 
         positive_score = self.decode(decoder, head_pos_embedded, tail_pos_embedded, emb_relation_pos_out)
         negative_score = self.decode(decoder, head_neg_embedded, tail_neg_embedded, emb_relation_neg_out)
-
-        ph_origin_embedded = self.entity_embedding(input_triplet_pos[:, 0])
-        pt_origin_embedded = self.entity_embedding(input_triplet_pos[:, 2])
-        nh_origin_embedded = self.entity_embedding(input_triplet_neg[:, 0])
-        nt_origin_embedded = self.entity_embedding(input_triplet_neg[:, 2])
 
         origin_positive_score = self.decode(decoder, ph_origin_embedded, pt_origin_embedded,
                                                    emb_relation_pos_out)
@@ -91,13 +91,13 @@ class LAN(torch.nn.Module):
 
         return loss
 
-    def encode(self, encoder, neighbor_ids, query_relation, weight):
+    def encode(self, encoder, neighbor_ids, query_relation, weight, self_embedding):
         """ TODO: check neighbor_ids content """
         neighbor_embedded = self.entity_embedding(neighbor_ids[:, :, 1])
         if self.use_relation == 1:
-            return encoder(neighbor_embedded, neighbor_ids, query_relation, weight)
+            return encoder(neighbor_embedded, neighbor_ids, query_relation, weight, self_embedding)
         else:
-            return encoder(neighbor_embedded, neighbor_ids[:, :, 0])
+            return encoder(neighbor_embedded, neighbor_ids[:, :, 0], self_embedding)
 
     def decode(self, decoder, head_embedded, tail_embedded, relation_embedded):
         score = decoder(head_embedded, tail_embedded, relation_embedded)
@@ -119,11 +119,15 @@ class LAN(torch.nn.Module):
         input_relation_pt = feed_dict['input_relation_pt']
         neighbor_weight_ph = feed_dict['neighbor_weight_ph']
         neighbor_weight_pt = feed_dict['neighbor_weight_pt']
+        input_triplet_pos = feed_dict['input_triplet_pos']
+
+        ph_origin_embedded = self.entity_embedding(input_triplet_pos[:, 0])
+        pt_origin_embedded = self.entity_embedding(input_triplet_pos[:, 2])
 
         head_pos_embedded= self.encode(self.encoder, neighbor_head_pos, input_relation_ph,
-                                           neighbor_weight_ph)
+                                           neighbor_weight_ph, ph_origin_embedded)
         tail_pos_embedded= self.encode(self.encoder, neighbor_tail_pos, input_relation_pt,
-                                           neighbor_weight_pt)
+                                           neighbor_weight_pt, pt_origin_embedded)
 
         emb_relation_pos_out = self.relation_embedding_out(input_relation_ph)
         return self.decode(self.decoder, head_pos_embedded, tail_pos_embedded, emb_relation_pos_out)
