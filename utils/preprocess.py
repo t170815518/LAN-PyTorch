@@ -1,4 +1,5 @@
 import os
+from random import sample
 
 
 def preprocess(file_path):
@@ -36,5 +37,16 @@ def preprocess(file_path):
                 f.write("{}\t{}\n".format(name, index))
 
 
+def sample_data(data_path, frac=0.5):
+    with open(os.path.join(data_path, "train"), "r") as f:
+        lines = f.readlines()
+    lines = sample(lines, round(len(lines) * frac))
+    dir = "{}_{}".format(data_path, frac)
+    os.mkdir(dir)
+    with open(os.path.join(dir, "train"), "w+") as f:
+        f.writelines(lines)
+
+
 if __name__ == '__main__':
-    preprocess("data/FB15k-237")
+    # preprocess("data/FB15k-237")
+    sample_data("data/FB15k-237")

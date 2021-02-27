@@ -15,6 +15,7 @@ class DataSet:
         self.max_neighbor = args.max_neighbor
         self.corrupt_mode = args.corrupt_mode
         self.n_sample = args.n_neg
+        self.is_use_NSCaching = args.is_use_NSCaching
         self.N_1 = args.N_1
         self.N_2 = args.N_2
         self.load_data(logger)
@@ -207,8 +208,9 @@ class DataSet:
                     triplet_tensor.append((head, relation, tail))
         return triplet_tensor
 
-    def batch_iter_epoch(self, data, batch_size, num_negative=1, corrupt=True, shuffle=True, is_use_cache=False):
-        """ Returns prepared information in np.ndarray to feed into the model.
+    def batch_iter_epoch(self, data, batch_size, num_negative=1, corrupt=True, shuffle=True):
+        """
+            Returns prepared information in np.ndarray to feed into the model.
         """
         data_size = len(data)
         if data_size % batch_size == 0:
@@ -251,7 +253,7 @@ class DataSet:
             batch_weight_pt = np.concatenate((batch_weight_pt, neighbor_imply_pt), axis=2)
 
             if corrupt:
-                if is_use_cache:
+                if self.is_use_NSCaching:
                     h_rand, t_rand = self.negative_sampling(batch_positive, h_idx, t_idx)
                     prob = self.corrupter.bern_prob[batch_positive[:, 1]]
                     selection = torch.bernoulli(prob).type(torch.ByteTensor)

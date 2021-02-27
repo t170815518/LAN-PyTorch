@@ -56,6 +56,8 @@ if __name__ == '__main__':
     config.score_function = "TransE"
     config.loss_function = "TransE"
     config.weight_decay = 0
+    config.is_use_NSCaching = False
+    config.attention_record = False
 
     evaluate(LAN, "data/FB15k-237/train_model.pt", config)
 
